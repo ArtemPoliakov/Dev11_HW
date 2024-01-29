@@ -16,20 +16,17 @@ import java.util.Objects;
 @WebFilter(servletNames = "TimeServlet")
 public class TimezoneValidateFilter extends HttpFilter {
     private static final Logger logger = LogManager.getLogger(TimezoneValidateFilter.class);
-
-    private static final int MAX_TIMEZONE_BOUND_FOR_LOCAL_DATE_TIME = 18;
-    private static final int MIN_TIMEZONE_BOUND_FOR_LOCAL_DATE_TIME = -18;
-    private static final int WHERE_HOUR_VALUE_IS_EXPECTED_TO_START_INDEX = 3;
     private static final String EXPECTED_PARAM_NAME = "timezone";
     private static final String INVALID_TIMEZONE_MESSAGE = "Invalid timezone";
     private static final String UNEXPECTED_ARGUMENT_MSG = "Unexpected argument -> bad request!";
     private static final String RESPONSE_WRITER_ERROR_MSG = "Response writer error!";
+    private static final String TIME_OFFSET_PARAM_VALIDATION_REGEX = "UTC[+\\- ](1[0-8]|\\d)";
 
     @Override
     public void doFilter(HttpServletRequest req, HttpServletResponse res, FilterChain chain) {
         Enumeration<String> parameterNames = req.getParameterNames();
-        while(parameterNames.hasMoreElements()){
-            if(!EXPECTED_PARAM_NAME.equals(parameterNames.nextElement())){
+        while (parameterNames.hasMoreElements()) {
+            if (!EXPECTED_PARAM_NAME.equals(parameterNames.nextElement())) {
                 res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                 try {
                     res.getWriter().write(UNEXPECTED_ARGUMENT_MSG);
@@ -53,11 +50,10 @@ public class TimezoneValidateFilter extends HttpFilter {
         }
 
         try {
-            int hourOffset = Integer.parseInt(timeZone.replace("+","").substring(WHERE_HOUR_VALUE_IS_EXPECTED_TO_START_INDEX).trim());
-            if (hourOffset < MIN_TIMEZONE_BOUND_FOR_LOCAL_DATE_TIME || hourOffset > MAX_TIMEZONE_BOUND_FOR_LOCAL_DATE_TIME) {
+            if (!timeZone.trim().matches(TIME_OFFSET_PARAM_VALIDATION_REGEX)) {
                 throw new IllegalArgumentException();
             }
-        } catch (IllegalArgumentException | IndexOutOfBoundsException e) {
+        } catch (IllegalArgumentException e) {
             res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             try {
                 res.getWriter().write(INVALID_TIMEZONE_MESSAGE);

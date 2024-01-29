@@ -1,6 +1,7 @@
 package com.homework.hw;
 
 import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -10,20 +11,20 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.templateresolver.FileTemplateResolver;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @WebServlet(urlPatterns = "/time", name = "TimeServlet")
 public class TimeServlet extends HttpServlet {
-    public static final String TIME_ZONE_SESSION_PARAM_NAME = "timeZone";
+    public static final String TIME_ZONE_COOKIE_NAME = "timeZone";
     public static final String TIME_ZONE_QUERY_PARAM_NAME = "timezone";
     public static final String DEFAULT_OFFSET = "UTC+0";
+    public static final String REGEX_FOR_TIME_PARSING = "-?\\d+";
     private TemplateEngine templateEngine;
     private static final Logger logger = LogManager.getLogger(TimeServlet.class);
     public static final int TIME_WITHOUT_MILLIS_LENGTH = 19;
@@ -47,11 +48,15 @@ public class TimeServlet extends HttpServlet {
         String finalTimeOffsetToParse = DEFAULT_OFFSET;
         String timeZone = req.getParameter(TIME_ZONE_QUERY_PARAM_NAME);
         if(Objects.nonNull(timeZone)){
-            req.getSession().setAttribute(TIME_ZONE_SESSION_PARAM_NAME, timeZone);
-        }
-        String sessionTimezoneAttribute = (String) req.getSession().getAttribute(TIME_ZONE_SESSION_PARAM_NAME);
-        if(Objects.nonNull(sessionTimezoneAttribute)){
-            finalTimeOffsetToParse = sessionTimezoneAttribute;
+            timeZone = timeZone.trim().replace(" ", "+");
+            Cookie timeCookie = new Cookie(TIME_ZONE_COOKIE_NAME, timeZone);
+            resp.addCookie(timeCookie);
+            finalTimeOffsetToParse = timeZone;
+        } else{
+            String timeZoneCookie = getCookieValueByName(req, TIME_ZONE_COOKIE_NAME);
+            if(Objects.nonNull(timeZoneCookie)){
+                finalTimeOffsetToParse = timeZoneCookie;
+            }
         }
         String time = parseTime(finalTimeOffsetToParse);
         try(PrintWriter writer = resp.getWriter()) {
@@ -66,12 +71,26 @@ public class TimeServlet extends HttpServlet {
         resp.setStatus(HttpServletResponse.SC_OK);
     }
 
-    private static String parseTime(String finalTimeOffsetToParse) {
-        String parsedTimeZone = finalTimeOffsetToParse.replace("+","");
-        int timeZoneInt = Integer.parseInt(parsedTimeZone.substring(3).trim());
-        String time = LocalDateTime.now(ZoneOffset.ofHours(timeZoneInt)).toString();
-        time = time.replace("T", " ").substring(0, TIME_WITHOUT_MILLIS_LENGTH)
-                + " " + finalTimeOffsetToParse;
-        return time;
+    private String parseTime(String offsetToParse) {
+        Matcher matcher = Pattern.compile(REGEX_FOR_TIME_PARSING).matcher(offsetToParse);
+        if(matcher.find()){
+            int timeZoneInt = Integer.parseInt(matcher.group());
+            String time = LocalDateTime.now(ZoneOffset.ofHours(timeZoneInt)).toString();
+            time = time.replace("T", " ").substring(0, TIME_WITHOUT_MILLIS_LENGTH)
+                    + " " + offsetToParse;
+            return time;
+        }
+        return null;
+    }
+    private String getCookieValueByName(HttpServletRequest req, String name){
+        Cookie[] cookies = req.getCookies();
+        if(Objects.nonNull(cookies)) {
+            for (Cookie cookie : cookies) {
+                if (name.equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
     }
 }
